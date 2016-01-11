@@ -126,7 +126,7 @@ out True    = putStr . show
 out False   = putChar . chr
 
 in_ :: Bool -> IO (Maybe Int)
-it_ True = do
+in_ True = do
     putStr "Enter an integer: "
     readMaybe <$> readLn
 in_ False = Just . ord <$> getChar
