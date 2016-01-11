@@ -3,6 +3,7 @@
 module  PietVM
         ( newPietVM
         , stepVM
+        , roll
         ) where
 
 import  Definition
@@ -33,11 +34,10 @@ move (x, y) = \case
 
 roll :: [Int] -> [Int]
 roll (steps:depth:xs)
-    | depth == 0 || steps' == 0  = xs
+    | depth < 2 || steps' == 0  = xs
     | depth <= length xs =
-        let
-            (xs', rest) = splitAt depth xs
-        in xs' ++ rest                                                          -- TODO perform roll
+        let (xs', rest) = splitAt depth xs
+        in (take depth . drop steps' . cycle) xs' ++ rest
   where
     steps' = steps `mod` depth
 roll xs = xs
@@ -47,14 +47,12 @@ findInstruction :: PietVM -> (Maybe (PietInstruction, Int), PietVM)
 findInstruction vm @ PietVM {code = Code {..}, pos = currentPosition} =
     (instr, vm')
   where
-    block   = getBlock currentPosition
     prevCol = getToken currentPosition
     nextCol = getToken pos
-
     (passedWhite, vm' @ PietVM {..}) = findBlock 1 False vm
     instr = if not running || passedWhite
         then Nothing
-        else Just (decodeToken prevCol nextCol, length block)
+        else Just (decodeToken prevCol nextCol, length $ getBlock currentPosition)
 
 findBlock :: Int -> Bool -> PietVM -> (Bool, PietVM)
 findBlock tries passedWhite vm @ PietVM {code = Code {..}, pos = pos, dp = dp}
@@ -73,7 +71,7 @@ stepVM :: PietVM -> IO PietVM
 stepVM vm_ = flip (maybe (return vm)) mInstr $ \(instr, value) -> case instr of
     In isInt    -> in_ isInt >>= maybe
                     (return vm)
-                    (\x -> trace instr x >> return vm {stack = x:stack})
+                    (\x -> trace instr x >> return vm {stack = x : stack})
     Out isInt   -> case stack of
                     x:xs    -> trace instr x >> out isInt x >> return vm {stack = xs}
                     _       -> return vm
@@ -106,7 +104,7 @@ stepVM vm_ = flip (maybe (return vm)) mInstr $ \(instr, value) -> case instr of
 
     -- operation with two arguments and the possibility of failure
     bivalent op = case stack of
-        x:y:xs  -> vm {stack = maybe stack (:xs) (x `op` y)}
+        x:y:xs  -> vm {stack = maybe xs (: xs) (x `op` y)}
         _       -> vm
 
 

@@ -73,10 +73,15 @@ withTracer runner vm = do
 
 main :: IO ()
 main = getArgs >>= \case
-    [] -> putStrLn "specify program"
+    [] -> putStrLn usage
     xs -> pietLoader (last xs) >>= \case
         Nothing -> return ()
         Just c  -> do
             hSetBuffering stdout NoBuffering
             let vm = newPietVM c
             if "-t" `elem` xs then withTracer runVM vm else runVM vm
+  where
+    usage = unlines $
+        [ "Piet Interpreter (c) 2016 M.G.Meier"
+        , "usage: piet [-t] <source img>"
+        ]

@@ -11,10 +11,10 @@ category:            Development
 build-type:          Simple
 cabal-version:       >= 1.10
 
-executable pietHS
+executable piet
   main-is:           Main.hs
   ghc-options:       -O2
-
+  other-modules:     Definition, PietVM
   other-extensions:  LambdaCase, FlexibleContexts, TypeFamilies, RecordWildCards, MultiWayIf
   build-depends:     base >= 4.8,
                      JuicyPixels >= 3.2.6,
