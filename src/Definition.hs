@@ -12,7 +12,6 @@ module  Definition
         , module ReExport
         ) where
 
-import  Data.Vector.Unboxed (Vector)
 import  Control.Monad       as ReExport (when, (>=>))
 import  Data.Word           as ReExport (Word8)
 import  Data.Char           as ReExport (toLower, ord, chr)
@@ -64,14 +63,14 @@ data Code = Code
 
 
 -- pretty printing, sort of
-showInstruction :: PietInstruction -> Int -> String
-showInstruction instr val = case instr of
+showInstruction :: (PietInstruction, Int) -> String
+showInstruction (instr, val) = case instr of
     Push        -> "push " ++ show val
-    In isInt    -> "in " ++ if isInt then showInt else showChar
-    Out isInt   -> "out " ++ if isInt then showInt else showChar
+    In isInt    -> "in " ++ if isInt then showInt else showChr
+    Out isInt   -> "out " ++ if isInt then showInt else showChr
     i           -> map toLower $ show i
   where
-    showChar    = "char '" ++ [chr val] ++ "'"
+    showChr     = "char '" ++ [chr val] ++ "'"
     showInt     = "int " ++ show val
 
 

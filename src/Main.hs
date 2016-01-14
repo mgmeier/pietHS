@@ -37,23 +37,23 @@ pietLoader = readImage >=> \case
     process pxSize Image {imageWidth = w, imageData = vec} =
         deepseq code $ Just Code
             { getBlock = _getBlock
-            , getToken = fromMaybe tokenBlock . (code !?) . toOffset
+            , getToken = fromMaybe tokenBlock . (codeSegment !?) . toOffset
             }
       where
         toOffset (x, y) = y * w + x
         -- fromOffset      = flip quotRem w
         neighbs (x, y)  = [(x+1, y), (x-1, y), (x, y+1), (x, y-1)]
 
-        code :: VU.Vector Word8
-        code = VU.generate (VS.length vec `div` pxSize) $ \ix ->
+        codeSegment :: VU.Vector Word8
+        codeSegment = VU.generate (VS.length vec `div` pxSize) $ \ix ->
             let getPx ofs = vec `VS.unsafeIndex` (ofs + ix * pxSize)
             in fromMaybe tokenPassThru $ lookup (getPx 0, getPx 1, getPx 2) pietColorScheme
 
         _getBlock ix_ =
-            maybe [] (\col -> gather col [] [ix_]) (code !? toOffset ix_)
+            maybe [] (\col -> gather col [] [ix_]) (codeSegment !? toOffset ix_)
          where
             gather _ res [] = res
-            gather col res (ix:ixs) = case code !? toOffset ix of
+            gather col res (ix:ixs) = case codeSegment !? toOffset ix of
                 Just tok | tok == col && ix `notElem` res ->
                      gather col (ix:res) (ixs ++ neighbs ix)
                 _ -> gather col res ixs
@@ -69,7 +69,7 @@ withTracer runner vm = do
     ioRef <- newIORef []
     runner vm {trace = \a b -> modifyIORef' ioRef ((a, b):)}
     putStrLn "\n--> execution trace  <--"
-    readIORef ioRef >>= mapM_ (putStrLn . uncurry showInstruction) . reverse
+    readIORef ioRef >>= mapM_ (putStrLn . showInstruction) . reverse
 
 main :: IO ()
 main = getArgs >>= \case
@@ -81,7 +81,7 @@ main = getArgs >>= \case
             let vm = newPietVM c
             if "-t" `elem` xs then withTracer runVM vm else runVM vm
   where
-    usage = unlines $
+    usage = unlines
         [ "Piet Interpreter (c) 2016 M.G.Meier"
         , "usage: piet [-t] <source img>"
         ]

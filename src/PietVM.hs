@@ -8,7 +8,11 @@ module  PietVM
 
 import  Definition
 
+import  qualified GHC.Exts  as Ext (Down(..))
 import  Prelude             hiding (Either(..))
+import  Data.Ord            (comparing)
+import  Data.List           (minimumBy)
+import  Data.Monoid         ((<>))
 import  Text.Read           (readMaybe)
 
 
@@ -32,15 +36,25 @@ move (x, y) = \case
     Right   -> (x+1, y)
 
 
-roll :: [Int] -> [Int]
-roll (steps:depth:xs)
-    | depth < 2 || steps' == 0  = xs
-    | depth <= length xs =
-        let (xs', rest) = splitAt depth xs
-        in (take depth . drop steps' . cycle) xs' ++ rest
+
+findEdge2 :: Direction -> Direction -> [(Int, Int)] -> (Int, Int)
+findEdge2 dp_ cc_ =
+    minimumBy (dpOrdering <> ccOrdering)
   where
-    steps' = steps `mod` depth
-roll xs = xs
+    dpOrdering  = compPred dp_
+    ccOrdering  = compPred (ccDirection cc_ dp_)
+
+    -- get a comparison predicate on coordinates given some Direction
+    compPred :: Direction -> (Int, Int) -> (Int, Int) -> Ordering
+    compPred Up     = comparing snd
+    compPred Left   = comparing fst
+    compPred Down   = comparing (Ext.Down . snd)
+    compPred Right  = comparing (Ext.Down . fst)
+
+    -- given cc and dp, get combined direction for finding code block edge
+    ccDirection :: Direction -> Direction -> Direction
+    ccDirection Left    = pointer (-1)
+    ccDirection _       = pointer 1
 
 
 findInstruction :: PietVM -> (Maybe (PietInstruction, Int), PietVM)
@@ -55,7 +69,7 @@ findInstruction vm @ PietVM {code = Code {..}, pos = currentPosition} =
         else Just (decodeToken prevCol nextCol, length $ getBlock currentPosition)
 
 findBlock :: Int -> Bool -> PietVM -> (Bool, PietVM)
-findBlock tries passedWhite vm @ PietVM {code = Code {..}, pos = pos, dp = dp}
+findBlock tries passedWhite vm @ PietVM {code = Code {..}, pos = pos, dp = dp, cc = cc}
     | tries > 8 = (passedWhite, vm {running = False})
     | otherwise = let tok = getToken pos' in if
         | tok == tokenBlock -> undefined                                        -- TODO
@@ -63,8 +77,7 @@ findBlock tries passedWhite vm @ PietVM {code = Code {..}, pos = pos, dp = dp}
         | otherwise -> undefined                                                -- TODO
   where
     block = getBlock pos
-    pos' = move pos dp
-    findEdge = (0, 0)                                                           -- TODO
+    pos' = move (findEdge2 dp cc block) dp
 
 
 stepVM :: PietVM -> IO PietVM
@@ -83,10 +96,10 @@ stepVM vm_ = flip (maybe (return vm)) mInstr $ \(instr, value) -> case instr of
         Divide      -> bivalent (\x y -> if x == 0 then Nothing else Just $ y `div` x)
         Mod         -> bivalent (\x y -> if x == 0 then Nothing else Just $ y `mod` x)
 
-        Pointer     -> monovalent (\h t -> vm {stack = t, dp = toEnum $ (h + fromEnum dp) `mod` 4})
+        Pointer     -> monovalent (\h t -> vm {stack = t, dp = pointer h dp})
         Duplicate   -> monovalent (\h _ -> vm {stack = h : stack})
         Pop         -> monovalent (\_ t -> vm {stack = t})
-        Switch      -> monovalent (\h t -> vm {stack = t, cc = if (even . abs) h then cc else flipDir cc})
+        Switch      -> monovalent (\h t -> vm {stack = t, cc = if (even . abs) h then cc else ccFlip cc})
         Not         -> monovalent (\h t -> vm {stack = intNot h : t})
 
         Roll        -> vm {stack = roll stack}
@@ -108,21 +121,40 @@ stepVM vm_ = flip (maybe (return vm)) mInstr $ \(instr, value) -> case instr of
         _       -> vm
 
 
+-- primops for the VM
 
-flipDir :: Direction -> Direction
-flipDir Left    = Right
-flipDir Right   = Left
-flipDir Up      = Down
-flipDir Down    = Up
-
+-- intNot primop for not instruction
 intNot :: Int -> Int
 intNot 0 = 1
 intNot _ = 0
 
+-- roll primop
+roll :: [Int] -> [Int]
+roll (steps:depth:xs)
+    | depth < 2 || steps' == 0  = xs
+    | depth <= length xs =
+        let (xs', rest) = splitAt depth xs
+        in (take depth . drop steps' . cycle) xs' ++ rest
+  where
+    steps' = steps `mod` depth
+roll xs = xs
+
+-- pointer primop
+pointer :: Int -> Direction -> Direction
+pointer 0 dir = dir
+pointer steps dir = toEnum $ (steps + fromEnum dir) `mod` 4
+
+-- flip primop for switch instruction
+ccFlip :: Direction -> Direction
+ccFlip Left = Right
+ccFlip _    = Left
+
+-- out primop
 out :: Bool -> Int -> IO ()
 out True    = putStr . show
 out False   = putChar . chr
 
+-- in primop
 in_ :: Bool -> IO (Maybe Int)
 in_ True = do
     putStr "Enter an integer: "
